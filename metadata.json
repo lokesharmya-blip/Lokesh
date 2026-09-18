@@ -1,0 +1,6 @@
+{
+  "name": "Live Polling App",
+  "description": "Real-time live polling platform with Go, Gin, Redis, MongoDB, and React",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

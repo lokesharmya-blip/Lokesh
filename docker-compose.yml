@@ -1,0 +1,83 @@
+version: '3.8'
+
+services:
+  # 1. MongoDB Document Database (Persistence for Users, Polls, Votes)
+  mongo:
+    image: mongo:7.0
+    container_name: polling-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - polling-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 2. Redis In-Memory Store (Atomic Vote Counters, Set-based Duplicate Prevention, Pub/Sub Fanout)
+  redis:
+    image: redis:7.2-alpine
+    container_name: polling-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - polling-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 3. Go with Gin Backend Service
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: polling-backend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - MONGO_URI=mongodb://mongo:27017
+      - MONGO_DB_NAME=live_polling_db
+      - REDIS_ADDR=redis:6379
+      - JWT_SECRET=production-live-polling-secret-key-2026
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - polling-network
+
+  # 4. React Vite Frontend
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: polling-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_API_URL=http://localhost:8080
+    depends_on:
+      - backend
+    networks:
+      - polling-network
+
+volumes:
+  mongo-data:
+  redis-data:
+
+networks:
+  polling-network:
+    driver: bridge
