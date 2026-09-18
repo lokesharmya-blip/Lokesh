@@ -29,6 +29,11 @@ func NewPollController(cfg *config.Config) *PollController {
 }
 
 func (pc *PollController) CreatePoll(c *gin.Context) {
+	if database.MongoDB == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Database service is unavailable"})
+		return
+	}
+
 	userIDStr, _ := c.Get("userID")
 	username, _ := c.Get("username")
 
@@ -117,6 +122,10 @@ func (pc *PollController) CreatePoll(c *gin.Context) {
 }
 
 func (pc *PollController) GetPoll(c *gin.Context) {
+	if database.MongoDB == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Database service is unavailable"})
+		return
+	}
 	pollIDParam := c.Param("id")
 	objID, err := primitive.ObjectIDFromHex(pollIDParam)
 	if err != nil {
@@ -179,6 +188,10 @@ func (pc *PollController) GetPoll(c *gin.Context) {
 }
 
 func (pc *PollController) ListMyPolls(c *gin.Context) {
+	if database.MongoDB == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Database service is unavailable"})
+		return
+	}
 	userIDStr, exists := c.Get("userID")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
@@ -231,6 +244,10 @@ func (pc *PollController) ListMyPolls(c *gin.Context) {
 }
 
 func (pc *PollController) ListPublicPolls(c *gin.Context) {
+	if database.MongoDB == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Database service is unavailable"})
+		return
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -271,6 +288,10 @@ func (pc *PollController) ListPublicPolls(c *gin.Context) {
 }
 
 func (pc *PollController) TogglePollStatus(c *gin.Context) {
+	if database.MongoDB == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Database service is unavailable"})
+		return
+	}
 	userIDStr, _ := c.Get("userID")
 	pollIDParam := c.Param("id")
 	objID, err := primitive.ObjectIDFromHex(pollIDParam)
@@ -333,6 +354,10 @@ func (pc *PollController) TogglePollStatus(c *gin.Context) {
 }
 
 func (pc *PollController) DeletePoll(c *gin.Context) {
+	if database.MongoDB == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Database service is unavailable"})
+		return
+	}
 	userIDStr, _ := c.Get("userID")
 	pollIDParam := c.Param("id")
 	objID, err := primitive.ObjectIDFromHex(pollIDParam)

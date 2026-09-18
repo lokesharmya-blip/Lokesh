@@ -22,14 +22,14 @@ RUN echo 'server { \
         try_files $uri $uri/ /index.html; \
     } \
     location /api/ { \
-        proxy_pass http://backend:8080/api/; \
+        proxy_pass http://backend:8081/api/; \
         proxy_http_version 1.1; \
         proxy_set_header Upgrade $http_upgrade; \
         proxy_set_header Connection "upgrade"; \
         proxy_set_header Host $host; \
     } \
     location /ws/ { \
-        proxy_pass http://backend:8080/ws/; \
+        proxy_pass http://backend:8081/ws/; \
         proxy_http_version 1.1; \
         proxy_set_header Upgrade $http_upgrade; \
         proxy_set_header Connection "Upgrade"; \

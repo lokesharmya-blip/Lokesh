@@ -29,22 +29,34 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 
+		mongoLatency, mongoErr := database.CheckDatabaseConnection(ctx)
 		mongoStatus := "ok"
-		if err := database.MongoClient.Ping(ctx, nil); err != nil {
-			mongoStatus = "error: " + err.Error()
+		if mongoErr != nil {
+			mongoStatus = "error: " + mongoErr.Error()
 		}
 
 		redisStatus := "ok"
-		if err := database.RedisClient.Ping(ctx).Err(); err != nil {
+		if database.RedisClient == nil {
+			redisStatus = "error: redis client not initialized"
+		} else if err := database.RedisClient.Ping(ctx).Err(); err != nil {
 			redisStatus = "error: " + err.Error()
 		}
 
-		c.JSON(http.StatusOK, gin.H{
-			"status":    "healthy",
-			"backend":   "Go with Gin",
-			"database":  mongoStatus,
-			"realtime":  redisStatus,
-			"timestamp": time.Now().UTC(),
+		overallStatus := "healthy"
+		httpCode := http.StatusOK
+		if mongoStatus != "ok" || redisStatus != "ok" {
+			overallStatus = "degraded"
+			httpCode = http.StatusServiceUnavailable
+		}
+
+		c.JSON(httpCode, gin.H{
+			"status":       overallStatus,
+			"backend":      "Go with Gin",
+			"database":     mongoStatus,
+			"databaseName": database.ConnectedDBName,
+			"mongoLatency": mongoLatency.String(),
+			"realtime":     redisStatus,
+			"timestamp":    time.Now().UTC(),
 		})
 	})
 

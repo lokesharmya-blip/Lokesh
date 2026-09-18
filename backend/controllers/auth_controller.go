@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -48,6 +49,14 @@ func (ac *AuthController) Signup(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	if database.MongoDB == nil {
+		log.Println("[AUTH ERROR] Signup attempted while database.MongoDB is nil")
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error": "Database service is unavailable. Please check MongoDB configuration.",
+		})
+		return
+	}
+
 	userCol := database.MongoDB.Collection("users")
 
 	// Check if username or email already taken
@@ -67,7 +76,11 @@ func (ac *AuthController) Signup(c *gin.Context) {
 		c.JSON(http.StatusConflict, gin.H{"error": "Username is already taken"})
 		return
 	} else if err != mongo.ErrNoDocuments {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error checking user existence"})
+		log.Printf("[AUTH ERROR] Database error checking user existence for '%s' / '%s': %v", req.Username, req.Email, err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Database error checking user existence",
+			"details": err.Error(),
+		})
 		return
 	}
 
@@ -88,7 +101,15 @@ func (ac *AuthController) Signup(c *gin.Context) {
 
 	_, err = userCol.InsertOne(ctx, newUser)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user account"})
+		log.Printf("[AUTH ERROR] Failed to insert user '%s': %v", req.Username, err)
+		if mongo.IsDuplicateKeyError(err) {
+			c.JSON(http.StatusConflict, gin.H{"error": "A user with this username or email already exists"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to create user account",
+			"details": err.Error(),
+		})
 		return
 	}
 
@@ -120,6 +141,14 @@ func (ac *AuthController) Login(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	if database.MongoDB == nil {
+		log.Println("[AUTH ERROR] Login attempted while database.MongoDB is nil")
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error": "Database service is unavailable. Please check MongoDB configuration.",
+		})
+		return
+	}
+
 	userCol := database.MongoDB.Collection("users")
 
 	filter := bson.M{
@@ -136,7 +165,11 @@ func (ac *AuthController) Login(c *gin.Context) {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid username/email or password"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database lookup failed"})
+		log.Printf("[AUTH ERROR] Database lookup failed during login for '%s': %v", identifier, err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Database lookup failed",
+			"details": err.Error(),
+		})
 		return
 	}
 
@@ -173,6 +206,11 @@ func (ac *AuthController) Me(c *gin.Context) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+
+	if database.MongoDB == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Database service is unavailable"})
+		return
+	}
 
 	var user models.User
 	err = database.MongoDB.Collection("users").FindOne(ctx, bson.M{"_id": objID}).Decode(&user)

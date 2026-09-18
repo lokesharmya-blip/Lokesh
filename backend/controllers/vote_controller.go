@@ -23,6 +23,11 @@ func NewVoteController() *VoteController {
 }
 
 func (vc *VoteController) CastVote(c *gin.Context) {
+	if database.MongoDB == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Database service is unavailable"})
+		return
+	}
+
 	pollIDParam := c.Param("id")
 	pollObjID, err := primitive.ObjectIDFromHex(pollIDParam)
 	if err != nil {

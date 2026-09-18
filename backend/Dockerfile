@@ -25,9 +25,9 @@ WORKDIR /app
 
 COPY --from=builder /app/server /app/server
 
-EXPOSE 8080
+EXPOSE 8081
 
-ENV PORT=8080 \
+ENV PORT=8081 \
     MONGO_URI=mongodb://mongo:27017 \
     MONGO_DB_NAME=live_polling_db \
     REDIS_ADDR=redis:6379 \
