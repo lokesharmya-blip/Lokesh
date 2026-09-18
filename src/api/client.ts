@@ -1,6 +1,35 @@
 import { Poll, User, AuthResponse, VoteResult, LiveVoteUpdate } from '../types';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
+const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+
+// Helper to safely parse JSON responses and extract backend error messages
+async function parseJsonResponse<T = any>(res: Response, fallbackError = 'Request failed'): Promise<T> {
+  const contentType = res.headers.get('content-type') || '';
+
+  if (!contentType.includes('application/json')) {
+    const text = await res.text().catch(() => '');
+    if (text.startsWith('<!doctype') || text.startsWith('<html') || text.includes('<!DOCTYPE')) {
+      throw new Error(
+        `Backend returned HTML instead of JSON (${res.status} ${res.statusText}). Verify the Go/Gin backend is running on port 8081 and the proxy is active.`
+      );
+    }
+    throw new Error(text.slice(0, 150) || `${fallbackError} (${res.status} ${res.statusText})`);
+  }
+
+  let data: any;
+  try {
+    data = await res.json();
+  } catch (err: any) {
+    throw new Error(`Invalid JSON received from server: ${err.message}`);
+  }
+
+  if (!res.ok) {
+    const errorMsg = data?.error || data?.message || `${fallbackError} (${res.status})`;
+    throw new Error(errorMsg);
+  }
+
+  return data as T;
+}
 
 // Voter ID management for public audience voting
 export function getVoterId(): string {
@@ -115,80 +144,27 @@ export const api = {
   },
 
   async signup(data: { username: string; email: string; password: string }): Promise<AuthResponse> {
-    try {
-      const res = await fetch(`${API_BASE}/api/auth/signup`, {
-        method: 'POST',
-        headers: getHeaders(false),
-        body: JSON.stringify(data),
-      });
-      if (res.ok) {
-        const result: AuthResponse = await res.json();
-        setAuthToken(result.token);
-        return result;
-      }
-      const err = await res.json().catch(() => ({ error: 'Signup failed' }));
-      throw new Error(err.error || 'Signup failed');
-    } catch (error: any) {
-      // If server unreachable, maintain resilient client session
-      if (error.message.includes('fetch') || error.message.includes('Failed to fetch') || error.message.includes('network')) {
-        const users: any[] = JSON.parse(localStorage.getItem(LOCAL_USERS_KEY) || '[]');
-        if (users.find(u => u.email === data.email)) {
-          throw new Error('Email is already registered');
-        }
-        if (users.find(u => u.username === data.username)) {
-          throw new Error('Username is already taken');
-        }
-        const newUser: User = {
-          id: 'user_' + Date.now(),
-          username: data.username,
-          email: data.email,
-          createdAt: new Date().toISOString(),
-        };
-        users.push({ ...newUser, password: data.password });
-        localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify(users));
-        const token = 'token_' + newUser.id + '_' + Date.now();
-        setAuthToken(token);
-        localStorage.setItem('current_user', JSON.stringify(newUser));
-        return { token, user: newUser };
-      }
-      throw error;
-    }
+    const res = await fetch(`${API_BASE}/api/auth/signup`, {
+      method: 'POST',
+      headers: getHeaders(false),
+      body: JSON.stringify(data),
+    });
+    const result = await parseJsonResponse<AuthResponse>(res, 'Signup failed');
+    setAuthToken(result.token);
+    localStorage.setItem('current_user', JSON.stringify(result.user));
+    return result;
   },
 
   async login(data: { identifier: string; password: string }): Promise<AuthResponse> {
-    try {
-      const res = await fetch(`${API_BASE}/api/auth/login`, {
-        method: 'POST',
-        headers: getHeaders(false),
-        body: JSON.stringify(data),
-      });
-      if (res.ok) {
-        const result: AuthResponse = await res.json();
-        setAuthToken(result.token);
-        return result;
-      }
-      const err = await res.json().catch(() => ({ error: 'Login failed' }));
-      throw new Error(err.error || 'Invalid credentials');
-    } catch (error: any) {
-      if (error.message.includes('fetch') || error.message.includes('Failed to fetch') || error.message.includes('network')) {
-        const users: any[] = JSON.parse(localStorage.getItem(LOCAL_USERS_KEY) || '[]');
-        const user = users.find(u => (u.email === data.identifier || u.username === data.identifier) && u.password === data.password);
-        if (!user) {
-          throw new Error('Invalid username/email or password');
-        }
-        const cleanUser: User = {
-          id: user.id,
-          username: user.username,
-          email: user.email,
-          createdAt: user.createdAt,
-        };
-        const token = 'token_' + user.id + '_' + Date.now();
-        setAuthToken(token);
-        localStorage.setItem('current_user', JSON.stringify(cleanUser));
-        return { token, user: cleanUser };
-      }
-      throw error;
-    }
+    const res = await fetch(`${API_BASE}/api/auth/signin`, {
+      method: 'POST',
+      headers: getHeaders(false),
+      body: JSON.stringify(data),
+    });
+    const result = await parseJsonResponse<AuthResponse>(res, 'Login failed');
+    setAuthToken(result.token);
+    localStorage.setItem('current_user', JSON.stringify(result.user));
+    return result;
   },
 
   async getMe(): Promise<User | null> {

@@ -53,6 +53,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 	{
 		authGroup.POST("/signup", authController.Signup)
 		authGroup.POST("/login", authController.Login)
+		authGroup.POST("/signin", authController.Login) // alias for login
 		authGroup.GET("/me", middleware.AuthMiddleware(cfg), authController.Me)
 	}
 
@@ -73,6 +74,23 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		protected.PATCH("/:id/status", pollController.TogglePollStatus)
 		protected.DELETE("/:id", pollController.DeletePoll)
 	}
+
+	// Catch-all 404 handler to ensure JSON responses instead of HTML
+	r.NoRoute(func(c *gin.Context) {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": "API route not found",
+			"path":  c.Request.URL.Path,
+		})
+	})
+
+	// 405 Method Not Allowed JSON handler
+	r.NoMethod(func(c *gin.Context) {
+		c.JSON(http.StatusMethodNotAllowed, gin.H{
+			"error":  "HTTP method not allowed",
+			"method": c.Request.Method,
+			"path":   c.Request.URL.Path,
+		})
+	})
 
 	return r
 }
